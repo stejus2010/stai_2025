@@ -217,7 +217,7 @@ function checkHarmfulIngredients(extractedText) {
         const response = await fetch("https://api-inference.huggingface.co/models/google/flan-t5-large", {
             method: "POST",
             headers: {
-                "Authorization": "Bearer YOUR_HF_API_KEY",
+                "Authorization": "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",
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
@@ -292,5 +292,6 @@ function saveChanges() {
 
     checkHarmfulIngredients(editedText);
 }
+
 
 
