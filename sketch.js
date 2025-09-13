@@ -63,7 +63,7 @@ function setup() {
 function startCamera() {
     const constraints = {
         video: {
-            facingMode: { exact: "user" } // Use back camera
+            facingMode: { exact: "environment" } // Use back camera
         }
     };
 
@@ -292,3 +292,4 @@ function saveChanges() {
 
     checkHarmfulIngredients(editedText);
 }
+
