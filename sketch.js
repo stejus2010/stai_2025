@@ -214,14 +214,25 @@ function checkHarmfulIngredients(extractedText) {
     try {
         // For now, we'll simulate AI with a free model API (OpenAI, HuggingFace, or local LLM).
         // Example with OpenAI (if you hook it later):
-        const response = await fetch("https://api-inference.huggingface.co/models/google/flan-t5-large", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Authorization": "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",
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                inputs: `Analyze the following ingredients for health risks:\n\n${extractedText}\n\nList possible harmful substances, health risks, and risk levels (low/medium/high).`
+                model: "gpt-4o-mini",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a food safety expert. Analyze ingredients and identify harmful substances with associated health risks."
+                    },
+                    {
+                        role: "user",
+                        content: `Analyze the following ingredients:\n\n${extractedText}\n\nList harmful substances, risk levels (low/medium/high), and possible health risks.`
+                    }
+                ],
+                temperature: 0.5
             })
         });
 
@@ -292,6 +303,7 @@ function saveChanges() {
 
     checkHarmfulIngredients(editedText);
 }
+
 
 
 
