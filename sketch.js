@@ -6,105 +6,61 @@ document.addEventListener('DOMContentLoaded', function() {
     const scannerScreen = document.getElementById('scanner-screen');
     const reloadButton = document.getElementById('reload-button');
 
-    if (!startButton) {
-        console.error("Start Button not found!");
-    }
+    if (!startButton) console.error("Start Button not found!");
 
     startButton.addEventListener('click', () => {
-        // Hide home screen and show scanner screen
         homeScreen.style.display = 'none';
-        scannerScreen.style.display = 'block'; // Directly display the scanner screen
-        startCamera(); // Initialize camera
+        scannerScreen.style.display = 'block';
+        startCamera();
     });
 
     if (galleryButton && galleryInput) {
-        galleryButton.addEventListener('click', () => {
-            galleryInput.click(); // Trigger the file input when the gallery button is clicked
-        });
-
+        galleryButton.addEventListener('click', () => galleryInput.click());
         galleryInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
-            if (file) {
-                processGalleryImage(file); // Function to handle image selection
-            }
+            if (file) processGalleryImage(file);
         });
     }
 
     if (reloadButton) {
-        reloadButton.addEventListener('click', () => {
-            location.reload(); // This will reload the current page
-        });
-    } else {
-        console.error("Reload button not found!");
-    }
-
+        reloadButton.addEventListener('click', () => location.reload());
+    } else console.error("Reload button not found!");
 });
 
 let cameraInput;
 let capturedImage;
 let extractedTextElement;
-let harmfulIngredientsData = {}; // To store harmful ingredients data
+let harmfulIngredientsData = {};
 
-// Load the harmful ingredients JSON data
 fetch('ingredients.json')
     .then(response => response.json())
-    .then(data => {
-        harmfulIngredientsData = data.harmfulIngredients; // Store the harmful ingredients
-    })
-    .catch(error => {
-        console.error("Error loading ingredients JSON:", error);
-    });
+    .then(data => { harmfulIngredientsData = data.harmfulIngredients; })
+    .catch(error => console.error("Error loading ingredients JSON:", error));
 
 function setup() {
-    noCanvas(); // We don't need a canvas for the video feed
+    noCanvas();
     extractedTextElement = document.getElementById('extracted-text');
 }
 
 function startCamera() {
-    const constraints = {
-        video: {
-            facingMode: "environment" // Use back camera
-        }
-    };
+    const constraints = { video: { facingMode: "environment" } };
 
     navigator.mediaDevices.getUserMedia(constraints)
         .then(function(stream) {
             cameraInput = createCapture(VIDEO);
             cameraInput.size(400, 300);
-            cameraInput.parent('video-container'); // Attach video to a div in HTML
+            cameraInput.parent('video-container');
             cameraInput.elt.srcObject = stream;
 
             const scanButton = document.getElementById('scan-button');
             const editButton = document.getElementById('edit-button');
             const saveButton = document.getElementById('save-button');
 
-            if (scanButton) {
-                scanButton.addEventListener('click', () => {
-                    captureImage();
-                });
-            } else {
-                console.error("Scan button not found!");
-            }
-
-            if (editButton) {
-                editButton.addEventListener('click', () => {
-                    enableEditing();
-                });
-            } else {
-                console.error("Edit button not found!");
-            }
-
-            if (saveButton) {
-                saveButton.addEventListener('click', () => {
-                    saveChanges();
-                });
-            } else {
-                console.error("Save button not found!");
-            }
+            if (scanButton) scanButton.addEventListener('click', captureImage);
+            if (editButton) editButton.addEventListener('click', enableEditing);
+            if (saveButton) saveButton.addEventListener('click', saveChanges);
         })
-        .catch(function(error) {
-            console.error("Error accessing the camera:", error);
-        });
+        .catch(function(error) { console.error("Error accessing the camera:", error); });
 }
 
 function captureImage() {
@@ -128,124 +84,106 @@ function processGalleryImage(file) {
             const width = img.width;
             const height = img.height;
 
-            // Create a p5 canvas with the same size as the loaded image
             const canvas = createGraphics(width, height);
-            
-            // Draw the image onto the p5 canvas
             canvas.drawingContext.drawImage(img, 0, 0, width, height);
 
-            // Show the captured image
             let capturedImageDiv = document.getElementById('captured-image');
             capturedImageDiv.innerHTML = '';
             let imageElement = createImg(canvas.canvas.toDataURL(), "Selected Image");
             capturedImageDiv.appendChild(imageElement.elt);
 
-            // Extract text from the canvas
             extractTextFromImage(canvas.canvas);
         };
     };
     reader.readAsDataURL(file);
 }
 
-
-
 function extractTextFromImage(imageCanvas) {
     Tesseract.recognize(imageCanvas, 'eng', { logger: m => console.log(m) })
         .then(result => {
             const extractedText = result.data.text;
             displayExtractedText(extractedText);
-            checkHarmfulIngredients(extractedText);
+            checkAllergiesThenHarmful(extractedText);
         })
-        .catch(error => {
-            console.error("Error during text extraction:", error);
-        });
+        .catch(error => console.error("Error during text extraction:", error));
 }
 
 function displayExtractedText(text) {
     extractedTextElement.value = text;
 }
 
-function checkHarmfulIngredients(extractedText) {
-    // Step 1: Clean and preprocess the extracted text
-    const cleanedText = extractedText
-        .toLowerCase() // Convert text to lowercase
-        .replace(/[^\w\s]/g, '') // Remove punctuation
-        .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
-        .trim(); // Trim leading/trailing spaces
+function checkAllergiesThenHarmful(extractedText) {
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            db.collection("users").doc(user.uid).get().then(doc => {
+                let allergyAlerts = [];
+                if (doc.exists) {
+                    const allergies = doc.data().allergies || [];
+                    const text = extractedText.toLowerCase();
+                    allergyAlerts = allergies.filter(a => text.includes(a.toLowerCase()));
+                }
 
-    // Step 2: Split the cleaned text into individual words (ingredients)
+                if (allergyAlerts.length > 0) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Allergy Alert!',
+                        text: `This product contains allergens: ${allergyAlerts.join(', ')}`
+                    }).then(() => detectHarmfulIngredients(extractedText));
+                } else {
+                    detectHarmfulIngredients(extractedText);
+                }
+            });
+        } else {
+            detectHarmfulIngredients(extractedText);
+        }
+    });
+}
+
+function detectHarmfulIngredients(extractedText) {
+    const cleanedText = extractedText.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
     const words = cleanedText.split(' ');
-
-    // Step 3: Filter out common words that are not ingredients
-    const ignoredWords = new Set(['and', 'or', 'with', 'sugar', 'salt', 'water']); // You can expand this list
+    const ignoredWords = new Set(['and', 'or', 'with', 'sugar', 'salt', 'water']);
     const filteredWords = words.filter(word => !ignoredWords.has(word));
 
-    // Step 4: Map of synonyms or alternative names for ingredients
-    const synonymMap = {
-        'vitamin c': 'ascorbic acid',
-        'e300': 'ascorbic acid',
-        'e330': 'citric acid',
-        // Add more synonyms or E-number mappings if needed
-    };
+    const synonymMap = { 'vitamin c': 'ascorbic acid', 'e300': 'ascorbic acid', 'e330': 'citric acid' };
+    const foundDiseases = new Set();
 
-    const foundDiseases = new Set(); // Use a Set to avoid duplicates
-
-    // Step 5: Check for harmful ingredients in both single words and bigrams (two-word pairs)
     for (let i = 0; i < filteredWords.length; i++) {
         let singleWord = filteredWords[i];
         let bigram = (i < filteredWords.length - 1) ? filteredWords[i] + ' ' + filteredWords[i + 1] : null;
 
-        // Map synonyms or check direct words
         let ingredientSingle = synonymMap[singleWord] || singleWord;
         let ingredientBigram = bigram ? (synonymMap[bigram] || bigram) : null;
 
-        // Check for harmful single words
-        if (harmfulIngredientsData[ingredientSingle]) {
-            harmfulIngredientsData[ingredientSingle].diseases.forEach(disease => foundDiseases.add(disease));
-        }
-
-        // Check for harmful two-word phrases (bigrams)
-        if (ingredientBigram && harmfulIngredientsData[ingredientBigram]) {
-            harmfulIngredientsData[ingredientBigram].diseases.forEach(disease => foundDiseases.add(disease));
-        }
+        if (harmfulIngredientsData[ingredientSingle]) harmfulIngredientsData[ingredientSingle].diseases.forEach(d => foundDiseases.add(d));
+        if (ingredientBigram && harmfulIngredientsData[ingredientBigram]) harmfulIngredientsData[ingredientBigram].diseases.forEach(d => foundDiseases.add(d));
     }
 
-    async function analyzeWithAI(extractedText) {
+    async function analyzeWithAI(text) {
     try {
-        // For now, we'll simulate AI with a free model API (OpenAI, HuggingFace, or local LLM).
-        // Example with OpenAI (if you hook it later):
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
-                "Authorization": "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",
+                    "Authorization": "Bearer YOUR_OPENAI_KEY",
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
                 model: "gpt-4o-mini",
                 messages: [
-                    {
-                        role: "system",
-                        content: "You are a food safety expert. Analyze ingredients and identify harmful substances with associated health risks."
-                    },
-                    {
-                        role: "user",
-                        content: `Analyze the following ingredients:\n\n${extractedText}\n\nList harmful substances, risk levels (low/medium/high), and possible health risks.`
-                    }
+                        { role: "system", content: "You are a food safety expert." },
+                        { role: "user", content: `Analyze ingredients:\n${text}\nList harmful substances and possible health risks.` }
                 ],
                 temperature: 0.5
             })
         });
-
         const result = await response.json();
-        return result[0]?.generated_text || "AI could not analyze this text.";
+            return result.choices[0]?.message?.content || "AI could not analyze this text.";
     } catch (error) {
         console.error("AI analysis error:", error);
         return "AI analysis failed.";
     }
 }
 
-
-    // Step 6: Display results using SweetAlert with options for "OK" and "Show Risks"
 if (foundDiseases.size > 0) {
     Swal.fire({
         icon: 'error',
@@ -281,6 +219,9 @@ if (foundDiseases.size > 0) {
             confirmButtonText: 'OK'
         });
     }
+    // Check allergies after checking harmful ingredients
+    checkUserAllergies(extractedText);
+
 }
 
 
@@ -303,7 +244,6 @@ function saveChanges() {
 
     checkHarmfulIngredients(editedText);
 }
-
 
 
 
